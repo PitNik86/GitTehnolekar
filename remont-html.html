@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Учёт ремонтов — Мастерская</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f0fdf4; color: #14532d; }
+  .hidden { display: none !important; }
+
+  header { background: #166534; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; }
+  header .spacer { flex: 1; }
+  header button { background: #22c55e; color: #fff; border: 0; padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  header button:hover { background: #16a34a; }
+
+  .tabs { display: flex; gap: 4px; background: #dcfce7; padding: 4px; border-radius: 8px; margin: 12px 16px; flex-wrap: wrap; }
+  .tabs button { flex: 1; min-width: 100px; padding: 8px 12px; border: 0; background: transparent; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; color: #166534; }
+  .tabs button.active { background: #fff; color: #15803d; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+  main { max-width: 1300px; margin: 0 auto; padding: 0 16px 24px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .toolbar input, .toolbar select { padding: 7px 10px; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 13px; }
+  .toolbar input[type="search"] { flex: 1; min-width: 160px; }
+  .btn { background: #22c55e; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .btn:hover { background: #16a34a; }
+  .btn.secondary { background: #dcfce7; color: #166534; }
+  .btn.secondary:hover { background: #bbf7d0; }
+  .btn.danger { background: #dc2626; }
+  .btn.danger:hover { background: #b91c1c; }
+  .btn.small { padding: 5px 8px; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #dcfce7; font-size: 13px; }
+  th { background: #f0fdf4; font-weight: 600; font-size: 11px; color: #166534; text-transform: uppercase; letter-spacing: .03em; }
+  tr:hover td { background: #f0fdf4; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .status.accepted { background: #fef3c7; color: #92400e; }
+  .status.inwork { background: #dbeafe; color: #1e40af; }
+  .status.ready { background: #dcfce7; color: #166534; }
+  .status.issued { background: #e5e7eb; color: #374151; }
+  .status.canceled { background: #fee2e2; color: #991b1b; }
+  .empty { text-align: center; padding: 30px; color: #86efac; font-size: 14px; }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(20,83,45,.5); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 100%; max-width: 680px; max-height: 92vh; overflow-y: auto; padding: 20px; }
+  .modal h2 { margin: 0 0 14px; font-size: 17px; color: #166534; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: #166534; margin-bottom: 3px; font-weight: 500; }
+  .form-grid input, .form-grid select, .form-grid textarea { width: 100%; padding: 7px 9px; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .form-grid textarea { resize: vertical; min-height: 50px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .hint { font-size: 11px; color: #86efac; margin-top: 2px; }
+  .actions-cell { white-space: nowrap; }
+  .actions-cell button { padding: 4px 7px; font-size: 12px; margin-left: 1px; }
+  @media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } }
+
+  .card { background: #fff; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+  .card h3 { margin: 0 0 12px; font-size: 15px; color: #166534; }
+  .stat-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat { background: #f0fdf4; border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 140px; }
+  .stat .label { font-size: 11px; color: #166534; text-transform: uppercase; letter-spacing: .03em; }
+  .stat .value { font-size: 22px; font-weight: 700; color: #15803d; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔧 Учёт ремонтов</h1>
+  <div class="spacer"></div>
+  <button onclick="openSettings()">⚙ Настройки</button>
+  <button onclick="exportData()">⬇ Экспорт</button>
+  <button onclick="document.getElementById('importFile').click()">⬆ Импорт</button>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+</header>
+
+<div class="tabs">
+  <button class="active" data-tab="orders" onclick="switchTab('orders')">📋 Заказы</button>
+  <button data-tab="parts" onclick="switchTab('parts')">📦 Склад</button>
+  <button data-tab="salary" onclick="switchTab('salary')">💰 Зарплата</button>
+</div>
+
+<main id="tab-orders">
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Поиск: клиент, телефон, модель, № заказа..." oninput="renderOrders()">
+    <select id="filterStatus" onchange="renderOrders()">
+      <option value="">Все статусы</option>
+      <option value="accepted">Принят</option>
+      <option value="inwork">В работе</option>
+      <option value="ready">Готов</option>
+      <option value="issued">Выдан</option>
+      <option value="canceled">Отменён</option>
+    </select>
+    <button class="btn" onclick="openOrderForm()">+ Новый заказ</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>№</th><th>Клиент</th><th>Телефон</th><th>Устройство</th><th>Неисправность</th><th>Статус</th><th>Цена</th><th>Дата</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="ordersBody"></tbody>
+  </table>
+  <div id="emptyOrders" class="empty" style="display:none">Заказов пока нет.</div>
+</main>
+
+<main id="tab-parts" class="hidden">
+  <div class="card">
+    <h3>📦 Остатки запчастей</h3>
+    <div class="toolbar">
+      <input type="search" id="partSearch" placeholder="Поиск по названию..." oninput="renderParts()">
+      <button class="btn" onclick="openPartForm()">+ Приход</button>
+    </div>
+    <table>
+      <thead><tr><th>Название</th><th>Артикул</th><th>Кол-во</th><th>Мин.</th><th>Цена закупки</th><th>Цена продажи</th><th></th></tr></thead>
+      <tbody id="partsBody"></tbody>
+    </table>
+    <div id="emptyParts" class="empty" style="display:none">Запчастей нет. Нажмите «+ Приход».</div>
+  </div>
+  <div class="card">
+    <h3>📋 История движения</h3>
+    <table>
+      <thead><tr><th>Дата</th><th>Запчасть</th><th>Тип</th><th>Кол-во</th><th>Комментарий</th></tr></thead>
+      <tbody id="partLogBody"></tbody>
+    </table>
+  </div>
+</main>
+
+<main id="tab-salary" class="hidden">
+  <div class="card">
+    <h3>💰 Настройки зарплаты</h3>
+    <div class="form-grid">
+      <div><label>Тип расчёта</label>
+        <select id="salaryType" onchange="toggleSalaryFields()">
+          <option value="percent">Процент от выручки</option>
+          <option value="fixed">Фиксированный оклад</option>
+          <option value="mixed">Оклад + процент</option>
+        </select>
+      </div>
+      <div><label>Процент, %</label><input id="salaryPercent" type="number" min="0" max="100" step="0.1" value="30"></div>
+      <div><label>Оклад, ₽</label><input id="salaryFixed" type="number" min="0" step="100" value="0"></div>
+      <div><label>Период</label>
+        <select id="salaryPeriod" onchange="renderSalary()">
+          <option value="month">Текущий месяц</option>
+          <option value="all">Всё время</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:10px"><button class="btn" onclick="saveSalarySettings()">Сохранить настройки</button></div>
+  </div>
+  <div class="card">
+    <h3>📊 Отчёт</h3>
+    <div class="stat-row" id="salaryStats"></div>
+    <div style="margin-top:14px">
+      <table>
+        <thead><tr><th>№ заказа</th><th>Дата</th><th>Клиент</th><th>Устройство</th><th>Сумма</th></tr></thead>
+        <tbody id="salaryOrdersBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div class="modal-bg" id="orderModalBg">
+  <div class="modal">
+    <h2 id="orderModalTitle">Новый заказ</h2>
+    <form id="orderForm" onsubmit="saveOrder(event)">
+      <input type="hidden" id="orderId">
+      <div class="form-grid">
+        <div><label>Клиент (ФИО)</label><input id="clientName" required></div>
+        <div><label>Телефон клиента</label><input id="clientPhone" required></div>
+        <div><label>Устройство (модель)</label><input id="device" required></div>
+        <div><label>IMEI / серийный</label><input id="imei"></div>
+        <div class="full"><label>Неисправность (со слов клиента)</label><textarea id="problem" required></textarea></div>
+        <div><label>Комплектация</label><input id="kit" placeholder="телефон, чехол, зарядка"></div>
+        <div><label>Внешний вид / повреждения</label><input id="appearance" placeholder="скол, трещина..."></div>
+        <div><label>Статус</label>
+          <select id="status">
+            <option value="accepted">Принят</option><option value="inwork">В работе</option><option value="ready">Готов</option><option value="issued">Выдан</option><option value="canceled">Отменён</option>
+          </select>
+        </div>
+        <div><label>Цена, ₽</label><input id="price" type="number" min="0" step="0.01"></div>
+        <div><label>Предоплата, ₽</label><input id="prepaid" type="number" min="0" step="0.01"></div>
+        <div><label>Срок готовности</label><input id="deadline" type="date"><div class="hint">Не более 45 дней (Закон о ЗПП)</div></div>
+        <div><label>Дата приёма</label><input id="date" type="date"></div>
+        <div><label>Мастер</label><input id="master"></div>
+        <div class="full"><label>Комментарий</label><textarea id="note"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" onclick="closeModal('orderModalBg')">Отмена</button>
+        <button type="submit" class="btn">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModalBg">
+  <div class="modal">
+    <h2>⚙ Настройки мастерской</h2>
+    <div class="form-grid">
+      <div class="full"><label>Название</label><input id="setName" placeholder="ИП Иванов / Сервис «Ремонт+»"></div>
+      <div><label>Телефон</label><input id="setPhone"></div>
+      <div><label>Адрес</label><input id="setAddress"></div>
+      <div class="full"><label>ИНН / реквизиты</label><input id="setRequisites"></div>
+      <div class="full"><label>Условия приёма (в квитанции)</label><textarea id="setTerms" rows="4"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn secondary" onclick="closeModal('settingsModalBg')">Отмена</button>
+      <button type="button" class="btn" onclick="saveSettings()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="partModalBg">
+  <div class="modal">
+    <h2 id="partModalTitle">Приход запчасти</h2>
+    <form id="partForm" onsubmit="savePart(event)">
+      <input type="hidden" id="partId">
+      <div class="form-grid">
+        <div class="full"><label>Название</label><input id="partName" required placeholder="Дисплей iPhone 13"></div>
+        <div><label>Артикул</label><input id="partSku"></div>
+        <div><label>Мин. остаток</label><input id="partMin" type="number" min="0" value="0"></div>
+        <div><label>Кол-во (приход)</label><input id="partQty" type="number" min="1" value="1" required></div>
+        <div><label>Цена закупки, ₽</label><input id="partBuy" type="number" min="0" step="0.01"></div>
+        <div><label>Цена продажи, ₽</label><input id="partSell" type="number" min="0" step="0.01"></div>
+        <div class="full"><label>Комментарий</label><input id="partNote"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn secondary" onclick="closeModal('partModalBg')">Отмена</button>
+        <button type="submit" class="btn">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const KEYS = {
+  orders: 'remont_orders_v1',
+  settings: 'remont_settings_v1',
+  parts: 'remont_parts_v1',
+  partLog: 'remont_partlog_v1',
+  salary: 'remont_salary_v1'
+};
+
+const DEFAULT_TERMS =
+`1. Мастерская не несёт ответственности за сохранность данных на устройстве. Перед сдачей в ремонт рекомендуется сделать резервную копию.
+2. Срок диагностики — до 2 рабочих дней. Окончательная стоимость ремонта согласовывается после диагностики.
+3. Срок устранения недостатков не может превышать 45 дней (ст. 20 Закона РФ «О защите прав потребителей»).
+4. Гарантия на выполненные работы — 30 дней с момента выдачи, если иное не указано.
+5. Устройство принимается без вскрытия. Скрытые дефекты доводятся до клиента отдельно.
+6. Если клиент не забирает устройство более 30 дней после уведомления, взимается плата за хранение.`;
+
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return fallback; }
+}
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+let orders = load(KEYS.orders, []);
+let settings = load(KEYS.settings, { name: 'Мастерская по ремонту телефонов', phone: '', address: '', requisites: '', terms: DEFAULT_TERMS });
+let parts = load(KEYS.parts, []);
+let partLog = load(KEYS.partLog, []);
+let salary = load(KEYS.salary, { type: 'percent', percent: 30, fixed: 0 });
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtDate(d) { if (!d) return '—'; const [y,m,day] = d.split('-'); return `${day}.${m}.${y}`; }
+function money(v) { if (v == null || v === '') return '—'; return Number(v).toLocaleString('ru-RU') + ' ₽'; }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function switchTab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  ['orders','parts','salary'].forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== name));
+  if (name === 'parts') renderParts();
+  if (name === 'salary') renderSalary();
+}
+function renderAll() { renderOrders(); renderParts(); renderSalary(); }
+
+const STATUS_LABELS = { accepted: 'Принят', inwork: 'В работе', ready: 'Готов', issued: 'Выдан', canceled: 'Отменён' };
+
+/* ===== ЗАКАЗЫ ===== */
+function renderOrders() {
+  const q = (document.getElementById('search')?.value || '').toLowerCase().trim();
+  const st = document.getElementById('filterStatus')?.value || '';
+  const tbody = document.getElementById('ordersBody');
+  const empty = document.getElementById('emptyOrders');
+  if (!tbody) return;
+  let list = orders.slice().sort((a,b) => b.id - a.id);
+  if (st) list = list.filter(o => o.status === st);
+  if (q) list = list.filter(o => [o.id,o.clientName,o.clientPhone,o.device,o.imei,o.problem,o.master].join(' ').toLowerCase().includes(q));
+  tbody.innerHTML = '';
+  empty.style.display = list.length ? 'none' : 'block';
+  list.forEach(o => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>#${o.id}</td>
+      <td>${esc(o.clientName)}</td>
+      <td>${esc(o.clientPhone)}</td>
+      <td>${esc(o.device)}</td>
+      <td>${esc(o.problem)}</td>
+      <td><span class="status ${o.status}">${STATUS_LABELS[o.status]||o.status}</span></td>
+      <td>${o.price ? money(o.price) : '—'}</td>
+      <td>${fmtDate(o.date)}</td>
+      <td class="actions-cell">
+        <button class="btn secondary small" title="Редактировать" onclick="editOrder(${o.id})">✏</button>
+        <button class="btn secondary small" title="Квитанция" onclick="printReceipt(${o.id})">📄</button>
+        <button class="btn danger small" title="Удалить" onclick="deleteOrder(${o.id})">🗑</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function openOrderForm(order) {
+  document.getElementById('orderModalTitle').textContent = order ? 'Редактировать #' + order.id : 'Новый заказ';
+  document.getElementById('orderId').value = order?.id || '';
+  document.getElementById('clientName').value = order?.clientName || '';
+  document.getElementById('clientPhone').value = order?.clientPhone || '';
+  document.getElementById('device').value = order?.device || '';
+  document.getElementById('imei').value = order?.imei || '';
+  document.getElementById('problem').value = order?.problem || '';
+  document.getElementById('kit').value = order?.kit || '';
+  document.getElementById('appearance').value = order?.appearance || '';
+  document.getElementById('status').value = order?.status || 'accepted';
+  document.getElementById('price').value = order?.price ?? '';
+  document.getElementById('prepaid').value = order?.prepaid ?? '';
+  document.getElementById('deadline').value = order?.deadline || '';
+  document.getElementById('date').value = order?.date || new Date().toISOString().slice(0,10);
+  document.getElementById('master').value = order?.master || '';
+  document.getElementById('note').value = order?.note || '';
+  document.getElementById('orderModalBg').classList.add('open');
+}
+function editOrder(id) { const o = orders.find(x => x.id === id); if (o) openOrderForm(o); }
+function saveOrder(ev) {
+  ev.preventDefault();
+  const id = document.getElementById('orderId').value;
+  const data = {
+    clientName: document.getElementById('clientName').value.trim(),
+    clientPhone: document.getElementById('clientPhone').value.trim(),
+    device: document.getElementById('device').value.trim(),
+    imei: document.getElementById('imei').value.trim(),
+    problem: document.getElementById('problem').value.trim(),
+    kit: document.getElementById('kit').value.trim(),
+    appearance: document.getElementById('appearance').value.trim(),
+    status: document.getElementById('status').value,
+    price: parseFloat(document.getElementById('price').value) || 0,
+    prepaid: parseFloat(document.getElementById('prepaid').value) || 0,
+    deadline: document.getElementById('deadline').value,
+    date: document.getElementById('date').value,
+    master: document.getElementById('master').value.trim(),
+    note: document.getElementById('note').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+  if (id) { const idx = orders.findIndex(x => x.id == id); orders[idx] = { ...orders[idx], ...data }; }
+  else { const nextId = orders.length ? Math.max(...orders.map(x => x.id)) + 1 : 1; orders.push({ id: nextId, createdAt: new Date().toISOString(), ...data }); }
+  save(KEYS.orders, orders); closeModal('orderModalBg'); renderOrders();
+}
+function deleteOrder(id) {
+  if (!confirm('Удалить заказ #' + id + '?')) return;
+  orders = orders.filter(x => x.id !== id); save(KEYS.orders, orders); renderOrders();
+}
+
+/* ===== КВИТАНЦИЯ (2 НА ЛИСТЕ А4) ===== */
+function printReceipt(id) {
+  const o = orders.find(x => x.id === id);
+  if (!o) return;
+  const s = settings;
+  const remain = (o.price||0) - (o.prepaid||0);
+
+  const receiptBlock = `
+  <div class="receipt">
+    <div class="r-header">
+      <div><strong>${esc(s.name||'Мастерская')}</strong><br><span class="r-small">${esc(s.address||'')} ${s.phone?'Тел: '+esc(s.phone):''}</span></div>
+      <div style="text-align:right"><strong>Квитанция № ${o.id}</strong><br><span class="r-small">от ${fmtDate(o.date)}</span></div>
+    </div>
+    <div class="r-title">КВИТАНЦИЯ О ПРИЁМЕ АППАРАТА В РЕМОНТ</div>
+    <table class="r-table">
+      <tr><td class="r-label">Клиент</td><td>${esc(o.clientName)}</td><td class="r-label">Телефон</td><td>${esc(o.clientPhone)}</td></tr>
+      <tr><td class="r-label">Устройство</td><td>${esc(o.device)}</td><td class="r-label">IMEI</td><td>${esc(o.imei)||'—'}</td></tr>
+      <tr><td class="r-label">Комплектация</td><td>${esc(o.kit)||'—'}</td><td class="r-label">Внешний вид</td><td>${esc(o.appearance)||'—'}</td></tr>
+      <tr><td class="r-label">Неисправность</td><td colspan="3">${esc(o.problem)}</td></tr>
+      <tr><td class="r-label">Мастер</td><td>${esc(o.master)||'—'}</td><td class="r-label">Срок готовности</td><td>${o.deadline?fmtDate(o.deadline):'по согласованию'}</td></tr>
+    </table>
+    <div class="r-totals">
+      <span>Стоимость: <b>${money(o.price)}</b></span>
+      <span>Аванс: <b>${money(o.prepaid)}</b></span>
+      <span>К доплате: <b>${money(remain)}</b></span>
+    </div>
+    <div class="r-terms">${esc((s.terms||DEFAULT_TERMS).slice(0, 500))}</div>
+    <div class="r-signs">
+      <div>Подпись клиента: ____________</div>
+      <div>Подпись мастера: ____________</div>
+    </div>
+  </div>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Квитанция №${o.id}</title>
+  <style>
+    @page { size: A4; margin: 5mm; }
+    body { font-family: 'Times New Roman', Times, serif; margin: 0; padding: 0; font-size: 11px; }
+    .sheet { width: 100%; height: 287mm; display: flex; flex-direction: column; }
+    .receipt { flex: 1; display: flex; flex-direction: column; padding: 3mm 0; overflow: hidden; }
+    .r-header { display: flex; justify-content: space-between; border-bottom: 1.5px solid #000; padding-bottom: 4px; margin-bottom: 6px; }
+    .r-small { font-size: 9px; }
+    .r-title { text-align: center; font-weight: bold; font-size: 12px; letter-spacing: .05em; margin: 4px 0 8px; }
+    .r-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    .r-table td { border: 1px solid #000; padding: 3px 5px; font-size: 10px; vertical-align: top; }
+    .r-label { background: #f0f0f0; font-weight: bold; width: 15%; }
+    .r-totals { display: flex; gap: 14px; font-size: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .r-terms { font-size: 8px; line-height: 1.3; white-space: pre-wrap; border: 1px solid #000; padding: 4px; max-height: 46mm; overflow: hidden; }
+    .r-signs { display: flex; justify-content: space-between; gap: 20px; margin-top: 10px; font-size: 9px; }
+    .cut-line { border-top: 1px dashed #999; text-align: center; font-size: 8px; color: #999; padding: 2px 0; }
+    @media print { body { -webkit-print-color-adjust: exact; } }
+  </style></head><body>
+  <div class="sheet">
+    ${receiptBlock}
+    <div class="cut-line">— — — — — — — — — — линия разреза — — — — — — — — — —</div>
+    ${receiptBlock}
+  </div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Разрешите всплывающие окна для печати.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+
+/* ===== НАСТРОЙКИ ===== */
+function openSettings() {
+  document.getElementById('setName').value = settings.name || '';
+  document.getElementById('setPhone').value = settings.phone || '';
+  document.getElementById('setAddress').value = settings.address || '';
+  document.getElementById('setRequisites').value = settings.requisites || '';
+  document.getElementById('setTerms').value = settings.terms || DEFAULT_TERMS;
+  document.getElementById('settingsModalBg').classList.add('open');
+}
+function saveSettings() {
+  settings = {
+    name: document.getElementById('setName').value.trim(),
+    phone: document.getElementById('setPhone').value.trim(),
+    address: document.getElementById('setAddress').value.trim(),
+    requisites: document.getElementById('setRequisites').value.trim(),
+    terms: document.getElementById('setTerms').value
+  };
+  save(KEYS.settings, settings);
+  closeModal('settingsModalBg');
+}
+
+/* ===== СКЛАД ===== */
+function renderParts() {
+  const q = (document.getElementById('partSearch')?.value || '').toLowerCase().trim();
+  const tbody = document.getElementById('partsBody');
+  const empty = document.getElementById('emptyParts');
+  if (!tbody) return;
+  let list = parts.slice();
+  if (q) list = list.filter(p => [p.name, p.sku].join(' ').toLowerCase().includes(q));
+  tbody.innerHTML = '';
+  empty.style.display = list.length ? 'none' : 'block';
+  list.forEach(p => {
+    const low = p.qty <= (p.min||0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.sku)||'—'}</td>
+      <td style="${low?'color:#dc2626;font-weight:700':''}">${p.qty}</td>
+      <td>${p.min||0}</td>
+      <td>${money(p.buy)}</td>
+      <td>${money(p.sell)}</td>
+      <td class="actions-cell">
+        <button class="btn secondary small" title="Приход" onclick="openPartForm(${p.id})">+</button>
+        <button class="btn secondary small" title="Списать 1" onclick="consumePart(${p.id})">−</button>
+        <button class="btn danger small" title="Удалить" onclick="deletePart(${p.id})">🗑</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  const logBody = document.getElementById('partLogBody');
+  if (logBody) {
+    logBody.innerHTML = '';
+    partLog.slice().reverse().slice(0, 50).forEach(l => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${fmtDate(l.date)}</td><td>${esc(l.partName)}</td><td>${l.type==='in
